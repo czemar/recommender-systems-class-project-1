@@ -67,7 +67,7 @@ class DataPreprocessingToolkit(object):
         :rtype: pd.DataFrame
         """
 
-        return df[df['accommodation_price'] >= 50]
+        return df[df['accommodation_price'] > 50]
 
     @staticmethod
     def fix_date_to(df):
@@ -104,8 +104,8 @@ class DataPreprocessingToolkit(object):
         :return: A DataFrame with added book_to_arrival column.
         :rtype: pd.DataFrame
         """
-        
-        df['book_to_arrival'] = (df['booking_date'] - df['date_from']).dt.days
+
+        df['book_to_arrival'] = (df['date_from'] - df['booking_date']).dt.days
         return df
 
     @staticmethod
@@ -131,10 +131,16 @@ class DataPreprocessingToolkit(object):
         :rtype: pd.DataFrame
         """
 
-        business_days = pd.bdate_range(df['date_from'], df['date_to'], freq="C", weekmask='Sun Mon Tue Wed Thu').dt.days
-        all_days = (df['booking_date'] - df['date_from']).dt.days
+        date_from = [d.date() for d in df['date_from']]
+        date_to = [d.date() for d in df['date_to']]
 
-        df['weekend_stay'] = business_days == all_days
+        df['weekend_stay'] = (np.busday_count(date_from, date_to, weekmask='Fri Sat') > 0)
+        df['weekend_stay'] = df['weekend_stay'].map({True: 'True', False: 'False'})
+
+        # business_days = pd.bdate_range(df['date_from'], df['date_to'], freq="C", weekmask='Sun Mon Tue Wed Thu').dt.days
+        # all_days = (df['booking_date'] - df['date_from']).dt.days
+
+        # df['weekend_stay'] = business_days == all_days
         return df
 
     @staticmethod
@@ -215,22 +221,34 @@ class DataPreprocessingToolkit(object):
                                         self.sum_columns + self.mean_columns + self.mode_columns + self.first_columns]
         group_reservations = df.loc[df['group_id'] != ""]
 
+        d = dict()
+
+        for to_sum in self.sum_columns:
+            d[to_sum] = 'sum'
+
+        for to_mean in self.mean_columns:
+            d[to_mean] = 'mean'
+
+        for to_mode in self.mode_columns:
+            d[to_mode] = lambda x: pd.Series.mode(x)[0],
+
+        for to_first in self.first_columns:
+            d[to_first] = 'first'
+
+        group_reservations = group_reservations.groupby('group_id', as_index=False).agg(d)
+
+        # print(df[df['group_id'] == 7])
+        print(group_reservations.iloc[1])
+
         # Apply group by on 'group_id' and take the sum in columns given under self.sum_columns
-        group_reservations = group_reservations.groupby('group_id', as_index=False)[self.sum_columns].sum()
-
         # Apply group by on 'group_id' and take the mean in columns given under self.mean_columns
-        group_reservations = group_reservations.groupby('group_id', as_index=False)[self.mean_columns].mean()
-
         # Apply group by on 'group_id' and take the mode (the most frequent value - you can use the pandas agg method
-
-
         # and in the lambda function use the value_counts method) in columns given under self.mode_columns
         # Apply group by on 'group_id' and take the first value in columns given under self.first_columns
         # Then merge those columns into one dataset and finally concatenate the aggregated group reservations
         # to non_group_reservations
-        ########################
-        # Write your code here #
-        ########################
+        return pd.concat([non_group_reservations, group_reservations], axis=0)
+
 
     @staticmethod
     def leave_only_ota(df):
