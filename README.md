@@ -56,3 +56,17 @@
   max_depth: 8
   min_samples_split: 18
   ```
+
+  ## XGBoost model
+  Using XGBoost model I was able to achieve score:
+
+  <img src="docs/xg-boost-best-result.png" width="100%">
+
+  Using tuned parameters:
+  ```yml
+  n_neg_per_pos: 9
+  n_estimators: 54
+  max_depth: 3
+  min_samples_split: 29
+  learning_rate: 0.05307561088311073
+  ```
