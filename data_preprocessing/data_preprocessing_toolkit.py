@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from dateutil.easter import easter
 from data_preprocessing.dataset_specification import DatasetSpecification
+from functools import reduce
 
 import pandas as pd
 import numpy as np
@@ -53,7 +54,6 @@ class DataPreprocessingToolkit(object):
         :rtype: pd.DataFrame
         """
 
-        DataPreprocessingToolkit.add_length_of_stay(df)
         return df[df['length_of_stay'] <= 21]
 
     @staticmethod
@@ -136,11 +136,6 @@ class DataPreprocessingToolkit(object):
 
         df['weekend_stay'] = (np.busday_count(date_from, date_to, weekmask='Fri Sat') > 0)
         df['weekend_stay'] = df['weekend_stay'].map({True: 'True', False: 'False'})
-
-        # business_days = pd.bdate_range(df['date_from'], df['date_to'], freq="C", weekmask='Sun Mon Tue Wed Thu').dt.days
-        # all_days = (df['booking_date'] - df['date_from']).dt.days
-
-        # df['weekend_stay'] = business_days == all_days
         return df
 
     @staticmethod
@@ -154,7 +149,7 @@ class DataPreprocessingToolkit(object):
         :rtype: pd.DataFrame
         """
         
-        df['night_price'] = df['accommodation_price'] / (df['length_of_stay'] * df['n_rooms'])
+        df['night_price'] = (df['accommodation_price'] / (df['length_of_stay'] * df['n_rooms'])).round(2)
         return df
 
     @staticmethod
@@ -221,25 +216,6 @@ class DataPreprocessingToolkit(object):
                                         self.sum_columns + self.mean_columns + self.mode_columns + self.first_columns]
         group_reservations = df.loc[df['group_id'] != ""]
 
-        d = dict()
-
-        for to_sum in self.sum_columns:
-            d[to_sum] = 'sum'
-
-        for to_mean in self.mean_columns:
-            d[to_mean] = 'mean'
-
-        for to_mode in self.mode_columns:
-            d[to_mode] = lambda x: pd.Series.mode(x)[0],
-
-        for to_first in self.first_columns:
-            d[to_first] = 'first'
-
-        group_reservations = group_reservations.groupby('group_id', as_index=False).agg(d)
-
-        # print(df[df['group_id'] == 7])
-        print(group_reservations.iloc[1])
-
         # Apply group by on 'group_id' and take the sum in columns given under self.sum_columns
         # Apply group by on 'group_id' and take the mean in columns given under self.mean_columns
         # Apply group by on 'group_id' and take the mode (the most frequent value - you can use the pandas agg method
@@ -247,7 +223,16 @@ class DataPreprocessingToolkit(object):
         # Apply group by on 'group_id' and take the first value in columns given under self.first_columns
         # Then merge those columns into one dataset and finally concatenate the aggregated group reservations
         # to non_group_reservations
-        return pd.concat([non_group_reservations, group_reservations], axis=0)
+        sum_cols = group_reservations.groupby('group_id', as_index=False)[self.sum_columns].sum()
+        mean_cols = group_reservations.groupby('group_id', as_index=False)[self.mean_columns].mean()
+        mode_cols = group_reservations.groupby('group_id', as_index=False)[self.mode_columns].agg(lambda x: pd.Series.mode(x)[0])
+        first_cols = group_reservations.groupby('group_id', as_index=False)[self.first_columns].first()
+
+        dfs = [sum_cols, mean_cols, mode_cols, first_cols]
+        
+        final_df = reduce(lambda  left,right: pd.merge(left,right,on=['group_id'], how='outer'), dfs).fillna('none')
+
+        return pd.concat([non_group_reservations, final_df], axis=0)
 
 
     @staticmethod
@@ -288,9 +273,9 @@ class DataPreprocessingToolkit(object):
         :return: A DataFrame with the room_segment column.
         :rtype: pd.DataFrame
         """
-        ########################
-        # Write your code here #
-        ########################
+
+        df['room_segment'] = df.groupby('room_group_id')['night_price'].transform(lambda x: self.map_value_to_bucket(x.mean(), self.room_segment_buckets))
+        return df
 
     def map_npeople_to_npeople_buckets(self, df):
         """

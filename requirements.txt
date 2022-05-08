@@ -1,0 +1,9 @@
+pandas==1.4.1
+numpy==1.20.3
+torch==1.11.0
+matplotlib==3.5.1
+scikit-learn==1.0.2
+hyperopt==0.2.7
+seaborn==0.11.2
+renderer
+sklearn
